@@ -22,11 +22,21 @@ typedef double stack_element;
 typedef long long int canary_t;
 
 
+
+#define void_arr(size)                                          \
+        if (size <= 0) {                                        \
+        printf("Error: массив пустой! Size = %zu\n" , size);    \
+        assert (0);                                             \
+    }
+
+
 #define STACK_ASSERT(stk)                                   \
         if (Stack_Error (stk) != COMPLETE_VALUE) {          \
             Stack_Dump (stk);                               \
             assert (0);                                     \
         }
+
+
 
 // stk.data[5] = 10;
 
@@ -36,12 +46,14 @@ struct Stack {
     unsigned int length_bytes_aligment;
     size_t size;
     size_t capacity;
-    unsigned long checksum;
+    unsigned long checksum_stack;
+    unsigned long checksum_arr;
     canary_t canary_2;
 };
 
 enum Stack_Error {
-    BAD_HASH = 52 ,
+    BAD_HASH_ARR = 52 ,
+    BAD_HASH_STACK = 69 ,
     BAD_SIZE = 111 , // size > capacity
     BAD_CANARY_1 = 1 ,
     BAD_CANARY_2 = 2 ,
@@ -62,6 +74,7 @@ const double FACTOR_INCR = 2;
 const double FACTOR_DECR = 0.5;
 
 int Stack_Dump (Stack* stk);
+unsigned long Calculate_stack_checksum (Stack* stk);
 
 #ifndef NDEBUG
 
@@ -87,7 +100,8 @@ int Stack_Ctor (Stack* stk , int capacity)
     stk->canary_1 = val_canary_1;
     stk->canary_2 = val_canary_2;
     stk->size = 0;
-    stk->checksum = 0;
+    stk->checksum_arr = 0;
+    stk->checksum_stack = 0;
     stk->capacity = capacity;
 
 
@@ -98,7 +112,7 @@ int Stack_Ctor (Stack* stk , int capacity)
 
         stk->length_bytes_aligment = (8 - (capacity * sizeof (stack_element)) % 8);
 
-    stack_element* data = (stack_element*) ((char*) calloc (1, capacity * sizeof(stack_element) + 2 * sizeof(canary_t) + stk->length_bytes_aligment));
+    stack_element* data = (stack_element*) ((char*) calloc (1 , capacity * sizeof(stack_element) + 2 * sizeof(canary_t) + stk->length_bytes_aligment));
     my_assert(data == NULL);
 
     *((canary_t*) data) = val_canary_3;
@@ -107,25 +121,37 @@ int Stack_Ctor (Stack* stk , int capacity)
 
     *((canary_t*) ((char*) (stk->data + capacity) + stk->length_bytes_aligment)) = val_canary_4;
 
-    // printf ("%d" , *stk->data);
-    // Stack_Dump (stk);
+    stk->checksum_stack = Calculate_stack_checksum (stk);
 
     return COMPLETE_VALUE;
 }
 //-------------------------------------------------------------------------------------------------
-unsigned long Calculate_checksum (Stack* stk)
+unsigned long Calculate_checksum (void* stk , int size_in_bytes)
 {
     unsigned long checksum = 0;
 
-    for (int i = 0 ; i < stk->capacity * sizeof (stack_element) ; i++)
+    for (int i = 0 ; i < size_in_bytes ; i++)
 
-        checksum += *((char*) stk->data + i);
+        checksum += *((char*) stk + i);
 
     return checksum;
 }
 //------------------------------------------------------------------------------------------
+unsigned long Calculate_stack_checksum (Stack* stk)
+{
+    unsigned long checksum = 0;
+
+    checksum += Calculate_checksum ((void*) &stk->length_bytes_aligment , sizeof (stk->length_bytes_aligment));
+    checksum += Calculate_checksum ((void*) &stk->size , sizeof (stk->size));
+    checksum += Calculate_checksum ((void*) &stk->capacity , sizeof (stk->capacity));
+    checksum += Calculate_checksum ((void*) &stk->data , sizeof (stk->data));
+
+    return checksum;
+}
+//----------------------------------------------------------------------------------------------------
 int Stack_Realloc (Stack* stk , double factor)
 {
+    my_assert (stk == NULL);
 
     int new_capacity = stk->capacity * factor;
     stk->length_bytes_aligment = 0;
@@ -134,8 +160,8 @@ int Stack_Realloc (Stack* stk , double factor)
         stk->length_bytes_aligment = 8 - (new_capacity * sizeof(stack_element)) % 8;
     }
 
-    stack_element* new_data = (stack_element*) realloc((canary_t*) stk->data - 1,
-            new_capacity * sizeof(stack_element) + 2 * sizeof(canary_t) + stk->length_bytes_aligment);
+    stack_element* new_data = (stack_element*) realloc ((canary_t*) stk->data - 1,
+            new_capacity * sizeof (stack_element) + 2 * sizeof (canary_t) + stk->length_bytes_aligment);
     my_assert (new_data == NULL);
 
     *((canary_t*) new_data) = val_canary_3;
@@ -144,7 +170,7 @@ int Stack_Realloc (Stack* stk , double factor)
 
     if (factor > 1) {
 
-        memset(stk->data + stk->capacity, 0, (new_capacity - stk->capacity) * sizeof(stack_element));
+        memset (stk->data + stk->capacity , 0 , (new_capacity - stk->capacity) * sizeof(stack_element));
     }
 
     *((canary_t*) ((char*) (stk->data + new_capacity) + stk->length_bytes_aligment)) = val_canary_4;
@@ -162,10 +188,17 @@ int Stack_Error (Stack* stk)
     canary_t* left_data_canary = (canary_t*) stk->data - 1;
     canary_t* right_data_canary = (canary_t*) ((char*) (stk->data + stk->capacity) + stk->length_bytes_aligment);
 
-    if (stk->size > stk->capacity) {
 
-        printf("Error: size больше чем capacity Size: %zu , Capacity: %zu\n" , stk->size , stk->capacity);
-        return BAD_SIZE;
+    if (stk->checksum_stack != Calculate_stack_checksum (stk)) {
+
+        printf ("Error: Содержимое структуры повреждено! Expected: %lu , Found: %lu\n" , stk->checksum_stack , Calculate_stack_checksum (stk));
+        return BAD_HASH_STACK;
+    }
+
+    if (stk->checksum_arr != Calculate_checksum (stk->data , stk->capacity * sizeof (stack_element))) {
+
+        printf ("Error: Содержимое массива данных повреждено! Expected: %lu , Found: %lu\n" , stk->checksum_arr , Calculate_checksum (stk->data , stk->capacity * sizeof (stack_element)));
+        return BAD_HASH_ARR;
     }
 
     if (stk->canary_1 != val_canary_1) {
@@ -192,11 +225,7 @@ int Stack_Error (Stack* stk)
         return BAD_CANARY_4;
     }
 
-    if (stk->checksum != Calculate_checksum (stk)) {
 
-        printf ("Error: Содержимое массива данных повреждено! Expected: %lu , Found: %lu\n" , stk->checksum , Calculate_checksum (stk));
-        return BAD_HASH;
-    }
 
     return COMPLETE_VALUE;
 }
@@ -236,18 +265,26 @@ int Stack_Dump (Stack* stk)
 
     fprintf (fp , "capacity = %d\n\n" , stk->capacity);
 
-    fprintf (fp , "Checksum = %lu  Maybe_changed_checksum = %lu\n\n" , stk->checksum , Calculate_checksum (stk));
+    fprintf (fp , "Checksum_arr = %lu  Maybe_changed_checksum_arr = %lu\n\n" , stk->checksum_arr , Calculate_checksum (stk->data , stk->capacity * sizeof (stack_element)));
+
+    fprintf (fp , "Checksum_stack = %lu Myabe_changed_checksum_stack = %lu\n\n" , stk->checksum_stack , Calculate_stack_checksum (stk));
 
     fprintf (fp , "&data = %x\n\n" , stk->data);
 
-    fprintf (fp , "data = [");
+    fprintf(fp, "[");
 
-    for (int i = 0 ; i < stk->capacity ; i++) {
+   for (int i = 0; i < stk->capacity; i++) {
 
-        fprintf (fp , " %lg " , stk->data[i]);
+        if (i < stk->size)
+
+            fprintf(fp, " %lg ", stk->data[i]);
+
+        else
+
+            fprintf(fp, " _ ");
     }
 
-    fprintf (fp , "]");
+    fprintf(fp, "]");
 
     fclose (fp);
 
@@ -256,8 +293,7 @@ int Stack_Dump (Stack* stk)
 //--------------------------------------------------------------------------------------------
 int Stack_Push (Stack* stk , stack_element value)
 {
-    my_assert (stk == NULL); //
-
+    my_assert (stk == NULL);
     STACK_ASSERT (stk);
 
     if (stk->size >= stk->capacity)
@@ -265,10 +301,11 @@ int Stack_Push (Stack* stk , stack_element value)
         Stack_Realloc (stk , FACTOR_INCR);
 
     stk->data[stk->size++] = value;
-
-    stk->checksum = Calculate_checksum (stk);
+    stk->checksum_arr = Calculate_checksum (stk->data , stk->capacity * sizeof (stack_element));
+    stk->checksum_stack = Calculate_stack_checksum (stk);
 
     STACK_ASSERT (stk);
+    void_arr (stk->size);
 
     return COMPLETE_VALUE;
 }
@@ -276,8 +313,8 @@ int Stack_Push (Stack* stk , stack_element value)
 stack_element Stack_Pop (Stack* stk)
 {
     my_assert(stk == NULL);
-
     STACK_ASSERT(stk);
+    void_arr (stk->size);
 
     stk->size--;
 
@@ -285,13 +322,15 @@ stack_element Stack_Pop (Stack* stk)
 
     stk->data[stk->size] = 0;
 
-    if (stk->size < stk->capacity / 4)
+    if (stk->size < 0.25 * stk->capacity)
 
-        Stack_Realloc(stk, FACTOR_DECR);
+        Stack_Realloc (stk, FACTOR_DECR);
 
-    stk->checksum = Calculate_checksum (stk);
+    stk->checksum_arr = Calculate_checksum (stk->data , stk->capacity * sizeof (stack_element));
+    stk->checksum_stack = Calculate_stack_checksum (stk);
 
     STACK_ASSERT(stk);
+
 
     printf ("%lg\n" , popped_value);
 
@@ -304,7 +343,7 @@ int Stack_Dtor (Stack* stk)
 
     if (stk->data != NULL) {
 
-        free((canary_t*) stk->data - 1);
+        free ((canary_t*) stk->data - 1);
         stk->data = NULL;
     }
 
@@ -312,34 +351,25 @@ int Stack_Dtor (Stack* stk)
 }
 
 
-
-
-int main() {
-
+int main ()
+{
     Stack stk = {};
-    int init_capacity = 5;
-    Stack_Ctor (&stk , init_capacity);
-    Stack_Push (&stk , 2);
-    Stack_Dump (&stk);
 
-    Stack_Push (&stk , 322);
-        // Stack_Dump (&stk);
+    Stack_Ctor(&stk, 5);
+    Stack_Push(&stk, 1000);
+    Stack_Push(&stk, 2000);
+    Stack_Push(&stk, 3000);
 
-    Stack_Push (&stk , 444);
-        // Stack_Dump (&stk);
+    Stack_Push(&stk, 4000);
+    Stack_Push(&stk, 5000);
 
-    Stack_Pop (&stk);
-        // Stack_Dump (&stk);
+    Stack_Push(&stk, 6000);
+    Stack_Pop(&stk);
+    Stack_Pop(&stk);
+    Stack_Pop(&stk);
+    Stack_Pop(&stk);
 
-    Stack_Pop (&stk);
-        // Stack_Dump (&stk);
-
-
-
-    Stack_Pop (&stk);
-        // Stack_Dump (&stk);
-
-     Stack_Dtor (&stk);
+    Stack_Dump(&stk);
 
     return 0;
 }
