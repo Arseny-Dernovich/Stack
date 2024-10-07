@@ -1,14 +1,15 @@
+
 typedef double stack_element;
-typedef long long int canary_t;
 
-
-
-#define void_arr(size)                                      \
-        if (size <= 0) {                                    \
-        printf("Error: массив пустой! Size = %zu\n" , size);    \
-        assert (0);                                         \
-    }
-
+#ifndef NDEBUG
+    typedef long long int canary_t;
+    enum canary_values {
+        val_canary_1 = 777777,
+        val_canary_2 = 666666,
+        val_canary_3 = 334334,
+        val_canary_4 = 333333
+    };
+#endif
 
 #define STACK_ASSERT(stk)                                   \
         if (Stack_Error (stk) != COMPLETE_VALUE) {          \
@@ -16,49 +17,56 @@ typedef long long int canary_t;
             assert (0);                                     \
         }
 
-
 struct Stack {
+#ifndef NDEBUG
     canary_t canary_1;
-    stack_element* data; // poison
+#endif
+    stack_element* data;
     unsigned int length_bytes_aligment;
     size_t size;
     size_t capacity;
+#ifndef NDEBUG
     unsigned long checksum_stack;
     unsigned long checksum_arr;
     canary_t canary_2;
+#endif
 };
 
-enum Stack_Error {
-    BAD_HASH_ARR = 52 ,
-    BAD_HASH_STACK = 69 ,
-    BAD_SIZE = 111 , // size > capacity
-    BAD_CANARY_1 = 1 ,
-    BAD_CANARY_2 = 2 ,
-    BAD_CANARY_3 = 3 ,
-    BAD_CANARY_4 = 4 ,
-    COMPLETE_VALUE = 0 ,
-
+enum Stack_error {
+    BAD_HASH_ARR = 52,
+    BAD_HASH_STACK = 69,
+    BAD_SIZE = 111,
+#ifndef NDEBUG
+    BAD_CANARY_1 = 1,
+    BAD_CANARY_2 = 2,
+    BAD_CANARY_3 = 3,
+    BAD_CANARY_4 = 4,
+#endif
+    COMPLETE_VALUE = 0,
 };
 
-enum canary_values {
-    val_canary_1 = 777 ,
-    val_canary_2 = 666 ,
-    val_canary_3 = 334 ,
-    val_canary_4 = 333
+enum Factor_Realloc {
+    UP = 1,
+    DOWN = 2
 };
 
 const double FACTOR_INCR = 2;
 const double FACTOR_DECR = 0.5;
 
-int Stack_Error (Stack* stk);
-int Stack_Dump (Stack* stk);
+Stack_error Stack_Error (Stack* stk);
+Stack_error Stack_Dump (Stack* stk);
 FILE* Open_Log_File (const char* filename_write);
-int Stack_Dtor (Stack* stk);
-int Stack_Ctor (Stack* stk , int capacity);
-int Stack_Push (Stack* stk , stack_element value);
+Stack_error Stack_Dtor (Stack* stk);
+Stack_error Stack_Ctor (Stack* stk , size_t capacity);
+Stack_error Stack_Push (Stack* stk , stack_element value);
 stack_element Stack_Pop (Stack* stk);
-unsigned long Calculate_stack_checksum (Stack* stk);
-unsigned long Calculate_checksum (void* stk , int size_in_bytes);
+unsigned long Stack_Calculate_Hashsum (Stack* stk);
+unsigned long Calculate_checksum (void* data , size_t size_in_bytes);
+int Calculate_Size_Arr_Bytes (size_t capacity , Stack* stk);
+Stack_error Calculate_Arr_Aligment (size_t capacity , Stack* stk);
+static Stack_error  Stack_Realloc_Down (Stack* stk);
+static Stack_error Stack_Realloc_Up (Stack* stk);
+static Stack_error Stack_Realloc (Stack* stk , double factor);
 
 /*
 data[0] = 1

@@ -61,13 +61,13 @@ enum Error_fstat {
 const float RAND_MAX_F = RAND_MAX;
 
 
-const char* const yellow          = "\033[3;33;40m";
-const char* const red             = "\033[3;31;40m";
-const char* const blue_dark       = "\033[3;34;40m";
-const char* const blue            = "\033[3;36;40m";
-const char* const blue_dark_flash = "\033[5;34;40m";
-const char* const green           = "\033[3;32;40m";
-const char* const end             = "\033[0m";
+const char* const YELLOW         = "\033[3;33;40m";
+const char* const RED             = "\033[3;31;40m";
+const char* const BLUE_DARK       = "\033[3;34;40m";
+const char* const BLUE            = "\033[3;36;40m";
+const char* const BLUE_DARK_FLASH = "\033[5;34;40m";
+const char* const GREEN           = "\033[3;32;40m";
+const char* const END             = "\033[0m";
 
 
 
