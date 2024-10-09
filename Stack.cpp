@@ -3,8 +3,6 @@
 
 Stack_error Stack_Ctor (Stack* stk , size_t capacity)
 {
-    my_assert (stk == NULL);
-
 #ifndef NDEBUG
     stk->canary_1 = val_canary_1;
     stk->canary_2 = val_canary_2;
@@ -30,7 +28,7 @@ Stack_error Stack_Ctor (Stack* stk , size_t capacity)
 #endif
 
 #ifndef NDEBUG
-    stk->checksum_stack = Stack_Calculate_Hashsum(stk);
+    stk->checksum_stack = Stack_Calculate_Hashsum (stk);
 #endif
 
     STACK_ASSERT (stk);
@@ -61,7 +59,7 @@ stack_element Stack_Pop (Stack* stk)
     my_assert(stk == NULL);
     STACK_ASSERT(stk);
 
-    if (stk->size <= 0) {
+    if (stk->size == 0) {
     printf("Error: массив пустой! Size = %zu\n" , stk->size);
     assert (0);
     }
@@ -95,7 +93,7 @@ static Stack_error Stack_Realloc_Up (Stack* stk)
 
 static Stack_error  Stack_Realloc_Down (Stack* stk)
 {
-    Stack_Realloc (stk , FACTOR_DECR);
+    Stack_Realloc (stk , FACTOR_INCR);
     return COMPLETE_VALUE;
 }
 
